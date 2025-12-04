@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Banknote, Plus } from 'lucide-react';
 import { api } from '../utils/api';
+import { useAuth } from '../hooks/useAuth';
 
 const TarikTunai = () => {
   const [formData, setFormData] = useState({
@@ -15,6 +16,7 @@ const TarikTunai = () => {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [totalSaldoKeseluruhan, setTotalSaldoKeseluruhan] = useState(0);
+  const { user } = useAuth();
 
   const banks = [
     'BCA', 'BRI', 'Mandiri', 'BNI', 'CIMB', 'Danamon', 
@@ -103,34 +105,38 @@ const TarikTunai = () => {
             </div>
           </div>
           
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-300 flex items-center"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Tarik Tunai Baru
-          </button>
+          {user?.role !== 'owner' && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-300 flex items-center"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Tarik Tunai Baru
+            </button>
+          )}
         </div>
       </div>
 
       {/* Info Box */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <Banknote className="h-5 w-5 text-red-400" />
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">Catatan Tarik Tunai</h3>
-            <div className="mt-2 text-sm text-red-700">
-              <ul className="list-disc list-inside space-y-1">
-                <li>Nominal tarik akan mengurangi saldo</li>
-                <li>Biaya tarik akan menambah saldo (pendapatan)</li>
-                <li>Saldo boleh minus untuk transaksi tarik tunai</li>
-              </ul>
+      {user?.role !== 'owner' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <Banknote className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Catatan Tarik Tunai</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Nominal tarik akan mengurangi saldo</li>
+                  <li>Biaya tarik akan menambah saldo (pendapatan)</li>
+                  <li>Saldo boleh minus untuk transaksi tarik tunai</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Total Saldo Keseluruhan */}
       <div className="bg-white rounded-lg shadow p-6">

@@ -620,13 +620,22 @@ const TransferDebit = () => {
               {formatCurrency(transfers.reduce((total, transfer) => total + parseInt(transfer.biaya), 0))}
             </div>
           </div>
-          
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="text-sm font-medium text-purple-600">Status Lunas</div>
-            <div className="text-xl md:text-2xl font-bold text-purple-900">
-              {transfers.filter(t => t.status === 'lunas').length}
+
+          {user?.role === 'owner' ? (
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="text-sm font-medium text-purple-600">Saldo Seluruh Kasir</div>
+              <div className="text-xl md:text-2xl font-bold text-purple-900">
+                {formatCurrency(totalSaldoAllCashiers)}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="text-sm font-medium text-purple-600">Status Lunas</div>
+              <div className="text-xl md:text-2xl font-bold text-purple-900">
+                {transfers.filter(t => t.status === 'lunas').length}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
