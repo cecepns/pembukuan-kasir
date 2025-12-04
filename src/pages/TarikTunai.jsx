@@ -14,6 +14,7 @@ const TarikTunai = () => {
   const [tarikTunai, setTarikTunai] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [totalSaldoKeseluruhan, setTotalSaldoKeseluruhan] = useState(0);
 
   const banks = [
     'BCA', 'BRI', 'Mandiri', 'BNI', 'CIMB', 'Danamon', 
@@ -34,12 +35,30 @@ const TarikTunai = () => {
     }
   };
 
+  const loadTotalSaldoKeseluruhan = async () => {
+    try {
+      const response = await api.get('/saldo/total');
+      setTotalSaldoKeseluruhan(response.total || 0);
+    } catch (error) {
+      console.error('Error loading total saldo:', error);
+      setTotalSaldoKeseluruhan(0);
+    }
+  };
+
+  useEffect(() => {
+    loadTotalSaldoKeseluruhan();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await api.post('/tarik-tunai', formData);
+      await api.post('/tarik-tunai', {
+        ...formData,
+        nominal_tarik: formData.nominal_tarik ? parseFloat(formData.nominal_tarik) : 0,
+        biaya_tarik: formData.biaya_tarik ? parseFloat(formData.biaya_tarik) : 0,
+      });
       
       setFormData({
         tanggal: new Date().toISOString().split('T')[0],
@@ -51,6 +70,7 @@ const TarikTunai = () => {
       
       setShowForm(false);
       loadTarikTunai();
+      loadTotalSaldoKeseluruhan();
       
       alert('Tarik tunai berhasil disimpan!');
     } catch (error) {
@@ -64,7 +84,9 @@ const TarikTunai = () => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
-      currency: 'IDR'
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -110,6 +132,14 @@ const TarikTunai = () => {
         </div>
       </div>
 
+      {/* Total Saldo Keseluruhan */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">TOTAL SALDO KESELURUHAN</h3>
+        <div className="text-3xl font-bold text-green-600">
+          {formatCurrency(totalSaldoKeseluruhan)}
+        </div>
+      </div>
+
       {/* Form Tarik Tunai */}
       {showForm && (
         <div className="bg-white rounded-lg shadow p-6">
@@ -152,9 +182,12 @@ const TarikTunai = () => {
                   Nominal Tarik
                 </label>
                 <input
-                  type="number"
-                  value={formData.nominal_tarik}
-                  onChange={(e) => setFormData({...formData, nominal_tarik: e.target.value})}
+                  type="text"
+                  value={formData.nominal_tarik ? formatCurrency(parseInt(formData.nominal_tarik)) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, nominal_tarik: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="Nominal yang ditarik"
                   required
@@ -166,9 +199,12 @@ const TarikTunai = () => {
                   Biaya Tarik
                 </label>
                 <input
-                  type="number"
-                  value={formData.biaya_tarik}
-                  onChange={(e) => setFormData({...formData, biaya_tarik: e.target.value})}
+                  type="text"
+                  value={formData.biaya_tarik ? formatCurrency(parseInt(formData.biaya_tarik)) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, biaya_tarik: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="Biaya tarik tunai"
                   required
@@ -322,11 +358,9 @@ const TarikTunai = () => {
           </div>
           
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="text-sm font-medium text-gray-600">Net Impact</div>
+            <div className="text-sm font-medium text-gray-600">TOTAL SALDO KESELURUHAN</div>
             <div className="text-xl md:text-2xl font-bold text-gray-900">
-              {formatCurrency(
-                tarikTunai.reduce((total, item) => total + parseInt(item.biaya_tarik) - parseInt(item.nominal_tarik), 0)
-              )}
+              {formatCurrency(totalSaldoKeseluruhan)}
             </div>
           </div>
         </div>

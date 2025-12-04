@@ -38,8 +38,6 @@ const Transfer = () => {
     keterangan: ''
   });
   
-  const [favorit, setFavorit] = useState([]);
-  const [favoritSearch, setFavoritSearch] = useState('');
   const [transfers, setTransfers] = useState([]);
   const [transferSearch, setTransferSearch] = useState('');
   const [pagination, setPagination] = useState({
@@ -54,18 +52,20 @@ const Transfer = () => {
   const [selectedCashier, setSelectedCashier] = useState('all');
   const [cashiers, setCashiers] = useState([]);
   const [periode, setPeriode] = useState('harian');
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]); // For owner: filter by date
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [grafikData, setGrafikData] = useState({
     harian: [],
     mingguan: [],
     bulanan: []
   });
+  const [totalSaldoKeseluruhan, setTotalSaldoKeseluruhan] = useState(0);
   const { user } = useAuth();
 
   useEffect(() => {
     if (user?.role === 'owner') {
       loadCashiers();
     }
+    loadTotalSaldoKeseluruhan();
   }, [user]);
 
   useEffect(() => {
@@ -81,9 +81,15 @@ const Transfer = () => {
     return () => clearTimeout(timer);
   }, [transferSearch]);
 
-  useEffect(() => {
-    loadFavorit();
-  }, [favoritSearch]);
+  const loadTotalSaldoKeseluruhan = async () => {
+    try {
+      const response = await api.get('/saldo/total');
+      setTotalSaldoKeseluruhan(response.total || 0);
+    } catch (error) {
+      console.error('Error loading total saldo:', error);
+      setTotalSaldoKeseluruhan(0);
+    }
+  };
 
   useEffect(() => {
     loadGrafik();
@@ -98,8 +104,8 @@ const Transfer = () => {
         params.append('cashier_id', selectedCashier);
       }
       
-      // For owner: filter by date (today or selected date)
-      if (user?.role === 'owner' && dateFilter) {
+      // Filter by selected date (default: hari ini) untuk semua role
+      if (dateFilter) {
         params.append('startDate', dateFilter);
         params.append('endDate', dateFilter);
       }
@@ -116,26 +122,11 @@ const Transfer = () => {
       const response = await api.get(url);
       
       if (response.data && response.pagination) {
-        let transfersData = Array.isArray(response.data) ? response.data : [];
-        // For owner: only show today's or latest date transfers
-        if (user?.role === 'owner') {
-          // Filter to show only transfers from selected date
-          transfersData = transfersData.filter(t => {
-            const transferDate = new Date(t.tanggal).toISOString().split('T')[0];
-            return transferDate === dateFilter;
-          });
-        }
+        const transfersData = Array.isArray(response.data) ? response.data : [];
         setTransfers(transfersData);
         setPagination(response.pagination);
       } else {
-        // Fallback untuk response lama
-        let transfersData = Array.isArray(response) ? response : [];
-        if (user?.role === 'owner') {
-          transfersData = transfersData.filter(t => {
-            const transferDate = new Date(t.tanggal).toISOString().split('T')[0];
-            return transferDate === dateFilter;
-          });
-        }
+        const transfersData = Array.isArray(response) ? response : [];
         setTransfers(transfersData);
       }
     } catch (error) {
@@ -153,20 +144,6 @@ const Transfer = () => {
     } catch (error) {
       console.error('Error loading cashiers:', error);
       setCashiers([]);
-    }
-  };
-
-  const loadFavorit = async () => {
-    try {
-      let url = '/transfer-favorit';
-      if (favoritSearch) {
-        url += `?search=${encodeURIComponent(favoritSearch)}`;
-      }
-      const response = await api.get(url);
-      setFavorit(Array.isArray(response) ? response : []);
-    } catch (error) {
-      console.error('Error loading favorit:', error);
-      setFavorit([]);
     }
   };
 
@@ -193,12 +170,22 @@ const Transfer = () => {
     try {
       if (editingTransfer) {
         // Update existing transfer
-        await api.put(`/transfer/${editingTransfer.id}`, formData);
+        await api.put(`/transfer/${editingTransfer.id}`, {
+          ...formData,
+          nominal: formData.nominal ? parseFloat(formData.nominal) : 0,
+          biaya: formData.biaya ? parseFloat(formData.biaya) : 0,
+          total_uang: formData.total_uang ? parseFloat(formData.total_uang) : 0
+        });
         alert('Transfer berhasil diupdate!');
         setEditingTransfer(null);
       } else {
         // Create new transfer
-        await api.post('/transfer', formData);
+        await api.post('/transfer', {
+          ...formData,
+          nominal: formData.nominal ? parseFloat(formData.nominal) : 0,
+          biaya: formData.biaya ? parseFloat(formData.biaya) : 0,
+          total_uang: formData.total_uang ? parseFloat(formData.total_uang) : 0
+        });
         alert('Transfer berhasil disimpan!');
       }
       
@@ -218,7 +205,7 @@ const Transfer = () => {
       // Reset to first page after save
       setPagination(prev => ({ ...prev, page: 1 }));
       await loadTransfers();
-      await loadFavorit();
+      await loadTotalSaldoKeseluruhan();
     } catch (error) {
       console.error('Error saving transfer:', error);
       alert('Gagal menyimpan transfer');
@@ -234,8 +221,8 @@ const Transfer = () => {
       bank_tujuan: transfer.bank_tujuan,
       nomor_rekening: transfer.nomor_rekening,
       nama_pemilik: transfer.nama_pemilik,
-      nominal: transfer.nominal,
-      biaya: transfer.biaya,
+      nominal: transfer.nominal?.toString() || '',
+      biaya: transfer.biaya?.toString() || '',
       total_uang: '',
       keterangan: transfer.keterangan || ''
     });
@@ -257,89 +244,66 @@ const Transfer = () => {
     setShowForm(false);
   };
 
-  const handleUseFavorit = (favItem) => {
-    setFormData({
-      ...formData,
-      bank_tujuan: favItem.bank_tujuan,
-      nomor_rekening: favItem.nomor_rekening,
-      nama_pemilik: favItem.nama_pemilik
-    });
-    setShowForm(true);
-  };
-
   const cetakStruk = (transfer) => {
-    // Format untuk dot matrix printer (A4/4 atau A6)
-    // Menggunakan format text sederhana yang bisa dicetak langsung ke dot matrix
-    const receiptText = `
-================================
-        STRUK TRANSFER
-================================
-
-Tanggal: ${new Date(transfer.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-
-Nama Bank Tujuan: ${transfer.bank_tujuan}
-
-Nomor Rek Tujuan: ${transfer.nomor_rekening}
-
-Nama Pemilik Rekening Tujuan: ${transfer.nama_pemilik}
-
-Nominal: Rp ${Number(transfer.nominal).toLocaleString('id-ID')}
-
-Total: Rp ${(Number(transfer.nominal) + Number(transfer.biaya)).toLocaleString('id-ID')}
-
-Keterangan: ${transfer.keterangan || '-'}
-
-================================
-    Terima Kasih
-================================
-`;
-
-    // Create PDF untuk preview/print
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [80, 120] // A6 size untuk dot matrix
+    const tanggalStr = new Date(transfer.tanggal).toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
     });
-
-    doc.setFontSize(12);
-    doc.text('STRUK TRANSFER', 40, 10, { align: 'center' });
-    
-    let y = 20;
-    doc.setFontSize(9);
-    doc.text(`Tanggal: ${new Date(transfer.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}`, 5, y);
-    y += 7;
-    doc.text(`Nama Bank Tujuan: ${transfer.bank_tujuan}`, 5, y);
-    y += 7;
-    doc.text(`Nomor Rek Tujuan: ${transfer.nomor_rekening}`, 5, y);
-    y += 7;
-    doc.text(`Nama Pemilik Rekening Tujuan: ${transfer.nama_pemilik}`, 5, y);
-    y += 7;
-    doc.text(`Nominal: Rp ${Number(transfer.nominal).toLocaleString('id-ID')}`, 5, y);
-    y += 7;
-    doc.text(`Total: Rp ${(Number(transfer.nominal) + Number(transfer.biaya)).toLocaleString('id-ID')}`, 5, y);
-    y += 7;
-    doc.text(`Keterangan: ${transfer.keterangan || '-'}`, 5, y);
-    
-    // Print to dot matrix printer (membuka print dialog)
-    // User bisa memilih EPSON LX-310 dari print dialog
-    doc.autoPrint();
-    doc.save(`struk-transfer-${transfer.id}.pdf`);
-    
-    // Alternative: Copy text to clipboard untuk paste ke printer software
-    navigator.clipboard.writeText(receiptText).then(() => {
-      console.log('Receipt text copied to clipboard');
-    });
+    const nominalStr = Number(transfer.nominal || 0).toLocaleString('id-ID');
+    const totalStr = (Number(transfer.nominal || 0) + Number(transfer.biaya || 0)).toLocaleString('id-ID');
+  
+    const lines = [
+      'STRUK TRANSFER BANK',
+      '---------------------------',
+      `TGL        : ${tanggalStr}`,
+      `BANK       : ${transfer.bank_tujuan || '-'}`,
+      `NO REK     : ${transfer.nomor_rekening || '-'}`,
+      `NAMA       : ${transfer.nama_pemilik || '-'}`,
+      `NOMINAL    : Rp ${nominalStr}`,
+      `TOTAL      : Rp ${totalStr}`,
+      `KET        : ${transfer.keterangan || '-'}`,
+      '',
+      'STRUK INI BUKTI TRANSFER YANG SAH',
+      'TERIMA KASIH',
+    ];
+  
+    const printWindow = window.open('', '_blank', 'width=600,height=600');
+    if (!printWindow) return;
+  
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Struk Transfer</title>
+          <style>
+            body { font-family: monospace; font-size: 12px; margin: 10px; }
+            pre { margin: 0; }
+          </style>
+        </head>
+        <body>
+          <pre>${lines.join('\n')}</pre>
+          <script>
+            window.focus();
+            window.print();
+            window.onafterprint = function() { window.close(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
-      currency: 'IDR'
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
   const formatCurrencySimple = (amount) => {
-    return `Rp ${Number(amount).toLocaleString('id-ID')}`;
+    return `Rp ${Number(amount || 0).toLocaleString('id-ID')}`;
   };
 
   const handleMarkAsLunas = async (transferId) => {
@@ -616,7 +580,7 @@ Keterangan: ${transfer.keterangan || '-'}
             <TransferIcon className="h-8 w-8 text-blue-600 mr-3" />
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-gray-900">Transfer Uang</h2>
-              <p className="text-gray-600">Proses transfer uang dan kelola favorit</p>
+              <p className="text-gray-600">Proses transfer uang dan pencatatan saldo</p>
             </div>
           </div>
           
@@ -645,6 +609,16 @@ Keterangan: ${transfer.keterangan || '-'}
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Total Saldo Keseluruhan */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          TOTAL SALDO KESELURUHAN
+        </h3>
+        <div className="text-3xl font-bold text-green-600">
+          {formatCurrency(totalSaldoKeseluruhan)}
         </div>
       </div>
 
@@ -726,9 +700,12 @@ Keterangan: ${transfer.keterangan || '-'}
                   Nominal
                 </label>
                 <input
-                  type="number"
-                  value={formData.nominal}
-                  onChange={(e) => setFormData({...formData, nominal: e.target.value})}
+                  type="text"
+                  value={formData.nominal ? formatCurrencySimple(formData.nominal) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, nominal: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Nominal transfer"
                   required
@@ -740,9 +717,12 @@ Keterangan: ${transfer.keterangan || '-'}
                   Biaya Admin
                 </label>
                 <input
-                  type="number"
-                  value={formData.biaya}
-                  onChange={(e) => setFormData({...formData, biaya: e.target.value})}
+                  type="text"
+                  value={formData.biaya ? formatCurrencySimple(formData.biaya) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, biaya: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Biaya admin"
                   required
@@ -754,9 +734,12 @@ Keterangan: ${transfer.keterangan || '-'}
                   Total Uang (Uang Diterima)
                 </label>
                 <input
-                  type="number"
-                  value={formData.total_uang}
-                  onChange={(e) => setFormData({...formData, total_uang: e.target.value})}
+                  type="text"
+                  value={formData.total_uang ? formatCurrencySimple(formData.total_uang) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, total_uang: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Uang yang diterima dari customer"
                 />
@@ -823,115 +806,6 @@ Keterangan: ${transfer.keterangan || '-'}
               </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {/* Grafik Monitoring */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-            <BarChart3 className="h-5 w-5 mr-2" />
-            Grafik Monitoring Transfer
-          </h3>
-          <select
-            value={periode}
-            onChange={(e) => setPeriode(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="harian">Harian</option>
-            <option value="mingguan">Mingguan</option>
-            <option value="bulanan">Bulanan</option>
-          </select>
-        </div>
-        <div className="h-64 mb-4">
-          <Line data={chartData} options={chartOptions} />
-        </div>
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t">
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <div className="text-xs font-medium text-blue-600">Total Transaksi</div>
-            <div className="text-lg font-bold text-blue-900">
-              {Array.isArray(grafikData[periode]) 
-                ? grafikData[periode].reduce((sum, item) => sum + (parseInt(item.total) || 0), 0)
-                : 0}
-            </div>
-          </div>
-          <div className="bg-green-50 p-3 rounded-lg">
-            <div className="text-xs font-medium text-green-600">Total Nominal</div>
-            <div className="text-lg font-bold text-green-900">
-              {formatCurrency(
-                Array.isArray(grafikData[periode])
-                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_nominal) || 0), 0)
-                  : 0
-              )}
-            </div>
-          </div>
-          <div className="bg-purple-50 p-3 rounded-lg">
-            <div className="text-xs font-medium text-purple-600">Total Biaya</div>
-            <div className="text-lg font-bold text-purple-900">
-              {formatCurrency(
-                Array.isArray(grafikData[periode])
-                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_biaya) || 0), 0)
-                  : 0
-              )}
-            </div>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-xs font-medium text-gray-600">Total Keseluruhan</div>
-            <div className="text-lg font-bold text-gray-900">
-              {formatCurrency(
-                Array.isArray(grafikData[periode])
-                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_all) || 0), 0)
-                  : 0
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Favorit */}
-      {user?.role !== 'owner' && favorit.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Star className="h-5 w-5 text-yellow-500 mr-2" />
-              Transfer Favorit
-            </h3>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                value={favoritSearch}
-                onChange={(e) => setFavoritSearch(e.target.value)}
-                placeholder="Cari favorit..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {favorit.slice(0, 5).map((item, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
-                <div className="font-semibold text-gray-900">{item.nama_pemilik}</div>
-                <div className="text-sm text-gray-600">{item.bank_tujuan}</div>
-                <div className="text-sm text-gray-600">{item.nomor_rekening}</div>
-                <button
-                  onClick={() => handleUseFavorit(item)}
-                  className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                >
-                  Gunakan
-                </button>
-              </div>
-            ))}
-          </div>
-          {favorit.length === 0 && favoritSearch && (
-            <p className="text-center text-gray-500 py-4">Tidak ada favorit yang ditemukan</p>
-          )}
-          {favorit.length > 5 && (
-            <p className="text-center text-gray-500 py-2 text-sm">
-              Menampilkan 5 favorit terbaru. Gunakan pencarian untuk mencari favorit lainnya.
-            </p>
-          )}
         </div>
       )}
 
@@ -1105,6 +979,69 @@ Keterangan: ${transfer.keterangan || '-'}
             </div>
           </div>
         )}
+      </div>
+
+      {/* Grafik Monitoring (dipindah ke bawah agar tidak mengganggu) */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <BarChart3 className="h-5 w-5 mr-2" />
+            Grafik Monitoring Transfer
+          </h3>
+          <select
+            value={periode}
+            onChange={(e) => setPeriode(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="harian">Harian</option>
+            <option value="mingguan">Mingguan</option>
+            <option value="bulanan">Bulanan</option>
+          </select>
+        </div>
+        <div className="h-64 mb-4">
+          <Line data={chartData} options={chartOptions} />
+        </div>
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <div className="text-xs font-medium text-blue-600">Total Transaksi</div>
+            <div className="text-lg font-bold text-blue-900">
+              {Array.isArray(grafikData[periode]) 
+                ? grafikData[periode].reduce((sum, item) => sum + (parseInt(item.total) || 0), 0)
+                : 0}
+            </div>
+          </div>
+          <div className="bg-green-50 p-3 rounded-lg">
+            <div className="text-xs font-medium text-green-600">Total Nominal</div>
+            <div className="text-lg font-bold text-green-900">
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_nominal) || 0), 0)
+                  : 0
+              )}
+            </div>
+          </div>
+          <div className="bg-purple-50 p-3 rounded-lg">
+            <div className="text-xs font-medium text-purple-600">Total Biaya</div>
+            <div className="text-lg font-bold text-purple-900">
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_biaya) || 0), 0)
+                  : 0
+              )}
+            </div>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-xs font-medium text-gray-600">Total Keseluruhan</div>
+            <div className="text-lg font-bold text-gray-900">
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_all) || 0), 0)
+                  : 0
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

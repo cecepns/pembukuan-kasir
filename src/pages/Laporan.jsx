@@ -50,7 +50,9 @@ const Laporan = () => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
-      currency: 'IDR'
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -66,14 +68,14 @@ const Laporan = () => {
     let y = 50;
     
     const data = [
-      ['Total Deposit', formatCurrency(laporan.totalDeposit)],
+      ['TOTAL SALDO APLIKASI TERPAKAI (1-7)', formatCurrency(laporan.totalDeposit)],
       ['Total Transfer', formatCurrency(laporan.totalTransfer)],
       ['Total Biaya Transfer', formatCurrency(laporan.totalBiayaTransfer)],
       ['Total Biaya Transfer Debit', formatCurrency(laporan.totalBiayaTransferDebit)],
       ['Total Tarik Tunai', formatCurrency(laporan.totalTarikTunai)],
       ['Total Biaya Tarik Tunai', formatCurrency(laporan.totalBiayaTarikTunai)],
       ['', ''],
-      ['SISA SALDO AKHIR', formatCurrency(laporan.sisaSaldo)]
+      ['TOTAL SALDO KESELURUHAN', formatCurrency(laporan.sisaSaldo)]
     ];
     
     data.forEach(([label, value]) => {
@@ -91,14 +93,14 @@ const Laporan = () => {
       [`Periode: ${filter.startDate} s/d ${filter.endDate}`],
       [''],
       ['Keterangan', 'Jumlah'],
-      ['Total Deposit', laporan.totalDeposit],
+      ['TOTAL SALDO APLIKASI TERPAKAI (1-7)', laporan.totalDeposit],
       ['Total Transfer', laporan.totalTransfer],
       ['Total Biaya Transfer', laporan.totalBiayaTransfer],
       ['Total Biaya Transfer Debit', laporan.totalBiayaTransferDebit],
       ['Total Tarik Tunai', laporan.totalTarikTunai],
       ['Total Biaya Tarik Tunai', laporan.totalBiayaTarikTunai],
       [''],
-      ['SISA SALDO AKHIR', laporan.sisaSaldo]
+      ['TOTAL SALDO KESELURUHAN', laporan.sisaSaldo]
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(data);
@@ -110,7 +112,7 @@ const Laporan = () => {
 
   const laporanItems = [
     {
-      title: 'Total Deposit',
+      title: 'TOTAL SALDO APLIKASI TERPAKAI (1-7)',
       value: laporan.totalDeposit,
       color: 'bg-green-500',
       textColor: 'text-green-600'
@@ -262,7 +264,7 @@ const Laporan = () => {
       {/* Sisa Saldo */}
       {!loading && (
         <div className="bg-gradient-to-r from-green-600 to-green-800 rounded-lg shadow p-6 text-white">
-          <h3 className="text-xl md:text-2xl font-bold mb-2">Sisa Saldo Akhir</h3>
+          <h3 className="text-xl md:text-2xl font-bold mb-2">TOTAL SALDO KESELURUHAN</h3>
           <div className="text-4xl font-bold">
             {formatCurrency(laporan.sisaSaldo)}
           </div>
@@ -297,7 +299,7 @@ const Laporan = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 <tr>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    Total Deposit (Modal)
+                    TOTAL SALDO APLIKASI TERPAKAI (1-7)
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right">
                     {formatCurrency(laporan.totalDeposit)}
@@ -369,7 +371,7 @@ const Laporan = () => {
                 
                 <tr className="bg-gray-50 font-semibold">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                    SISA SALDO AKHIR
+                    TOTAL SALDO KESELURUHAN
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right" colSpan="2">
                     {formatCurrency(laporan.sisaSaldo)}

@@ -18,7 +18,7 @@ const ModalInput = () => {
   const [selectedCashier, setSelectedCashier] = useState(null);
   const [modalKasInput, setModalKasInput] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [totalSaldoAllCashiers, setTotalSaldoAllCashiers] = useState(0);
+  const [totalSaldoKeseluruhan, setTotalSaldoKeseluruhan] = useState(0);
   const { user } = useAuth();
 
   const modalApps = [
@@ -28,25 +28,27 @@ const ModalInput = () => {
     { id: 'payfazz', name: 'Aplikasi-4 / PAYFAZZ', label: 'PAYFAZZ', color: 'bg-orange-500' },
     { id: 'posfin', name: 'Aplikasi-5 / POSFIN', label: 'POSFIN', color: 'bg-red-500' },
     { id: 'buku_agen', name: 'Aplikasi-6 / BUKU AGEN/BUKU WARUNG', label: 'BUKU AGEN/BUKU WARUNG', color: 'bg-yellow-500' },
-    ...(user?.role === 'owner' ? [{ id: 'modal_kas', name: 'Aplikasi-7 / MODAL KAS', label: 'MODAL KAS', color: 'bg-gray-600' }] : [])
+    // Aplikasi-7 / MODAL KAS selalu ditampilkan.
+    // Untuk kasir bersifat read-only (diinput oleh owner/admin).
+    { id: 'modal_kas', name: 'Aplikasi-7 / MODAL KAS', label: 'MODAL KAS', color: 'bg-gray-600' }
   ];
 
   useEffect(() => {
     loadModalData();
     loadModalHistory();
+    loadTotalSaldoKeseluruhan();
     if (user?.role === 'owner') {
       loadCashiers();
-      loadTotalSaldoAllCashiers();
     }
   }, []);
 
-  const loadTotalSaldoAllCashiers = async () => {
+  const loadTotalSaldoKeseluruhan = async () => {
     try {
       const response = await api.get('/saldo/total');
-      setTotalSaldoAllCashiers(response.total || 0);
+      setTotalSaldoKeseluruhan(response.total || 0);
     } catch (error) {
       console.error('Error loading total saldo:', error);
-      setTotalSaldoAllCashiers(0);
+      setTotalSaldoKeseluruhan(0);
     }
   };
 
@@ -128,7 +130,7 @@ const ModalInput = () => {
         setShowForm(false);
         await loadModalData();
         await loadModalHistory();
-        await loadTotalSaldoAllCashiers();
+        await loadTotalSaldoKeseluruhan();
         alert('Modal Kas berhasil ditambahkan untuk kasir');
       } catch (error) {
         console.error('Error saving modal kas:', error);
@@ -211,16 +213,24 @@ const ModalInput = () => {
     }
   };
 
-  const handleCancelHistoryEdit = () => {
-    setEditingHistoryId(null);
-    setEditHistoryValue('');
-  };
-
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
-      currency: 'IDR'
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const handleRupiahInputChange = (setter) => (e) => {
+    const raw = e.target.value || '';
+    const numeric = raw.replace(/[^0-9]/g, '');
+    setter(numeric);
+  };
+
+  const handleCancelHistoryEdit = () => {
+    setEditingHistoryId(null);
+    setEditHistoryValue('');
   };
 
   const getCurrentValue = (modalType, userId = null) => {
@@ -364,9 +374,9 @@ const ModalInput = () => {
                   Nominal Modal Kas
                 </label>
                 <input
-                  type="number"
-                  value={modalKasInput}
-                  onChange={(e) => setModalKasInput(e.target.value)}
+                  type="text"
+                  value={modalKasInput ? formatCurrency(parseFloat(modalKasInput)) : ''}
+                  onChange={handleRupiahInputChange(setModalKasInput)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Masukkan nominal modal kas"
                 />
@@ -446,7 +456,7 @@ const ModalInput = () => {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">TOTAL SALDO SELURUH KASIR</h3>
             <div className="text-3xl font-bold text-green-600">
-              {formatCurrency(totalSaldoAllCashiers)}
+              {formatCurrency(totalSaldoKeseluruhan)}
             </div>
             <p className="text-gray-600 mt-2">
               Total saldo dari semua kasir
@@ -519,9 +529,9 @@ const ModalInput = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                             {isEditing ? (
                               <input
-                                type="number"
-                                value={editHistoryValue}
-                                onChange={(e) => setEditHistoryValue(e.target.value)}
+                                type="text"
+                                value={editHistoryValue ? formatCurrency(parseFloat(editHistoryValue)) : ''}
+                                onChange={handleRupiahInputChange(setEditHistoryValue)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Masukkan nominal"
                               />
@@ -605,6 +615,7 @@ const ModalInput = () => {
         {modalApps.map((app) => {
           const currentValue = getCurrentValue(app.id);
           const isEditing = editingId === app.id;
+          const isModalKas = app.id === 'modal_kas';
           
           return (
             <div key={app.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
@@ -624,9 +635,9 @@ const ModalInput = () => {
                   {isEditing ? (
                     <div className="space-y-3">
                       <input
-                        type="number"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
+                        type="text"
+                        value={editValue ? formatCurrency(parseFloat(editValue)) : ''}
+                        onChange={handleRupiahInputChange(setEditValue)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Masukkan nominal"
                       />
@@ -657,11 +668,20 @@ const ModalInput = () => {
                       </div>
                       
                       <button
-                        onClick={() => handleEdit(app.id, currentValue)}
-                        className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center"
+                        onClick={() => {
+                          if (!isModalKas) {
+                            handleEdit(app.id, currentValue);
+                          }
+                        }}
+                        disabled={isModalKas}
+                        className={`w-full px-4 py-2 rounded-lg transition duration-300 flex items-center justify-center ${
+                          isModalKas
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                       >
                         <PencilIcon className="h-4 w-4 mr-2" />
-                        Edit Nominal
+                        {isModalKas ? 'Diatur oleh Owner/Admin' : 'Edit Nominal'}
                       </button>
                     </div>
                   )}
@@ -697,7 +717,7 @@ const ModalInput = () => {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Total Modal Saat Ini</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">TOTAL SALDO APLIKASI TERPAKAI (1-7)</h3>
           <div className="text-3xl font-bold text-blue-600">
             {formatCurrency(
               modalApps.reduce((total, app) => {
@@ -707,17 +727,17 @@ const ModalInput = () => {
             )}
           </div>
           <p className="text-gray-600 mt-2">
-            Total dari {modalApps.length} aplikasi modal
+            Total saldo dari {modalApps.length} aplikasi modal yang terpakai
           </p>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">TOTAL SALDO DEPOSIT</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">TOTAL SALDO KESELURUHAN</h3>
           <div className="text-3xl font-bold text-green-600">
-            {formatCurrency(getTotalSaldoDeposit())}
+            {formatCurrency(totalSaldoKeseluruhan)}
           </div>
           <p className="text-gray-600 mt-2">
-            Total semua deposit yang pernah dilakukan
+            Total saldo keseluruhan setelah semua transaksi
           </p>
         </div>
       </div>
