@@ -146,8 +146,30 @@ app.get('/modal', authenticateToken, async (req, res) => {
 });
 
 app.post('/modal', authenticateToken, async (req, res) => {
-  const { modal_type, nominal } = req.body;
-  const user_id = req.user.id;
+  const { modal_type, nominal, user_id: target_user_id } = req.body;
+  // For owner role, allow specifying target user_id, otherwise use authenticated user's id
+  let user_id = req.user.id;
+  
+  // If owner specifies user_id, use it (for adding modal to kasir)
+  if (req.user.role === 'owner' && target_user_id) {
+    // Validate that target user exists and is a kasir
+    try {
+      const [userRows] = await db.promise().execute(
+        'SELECT id, role FROM users WHERE id = ? AND status = "aktif"',
+        [target_user_id]
+      );
+      if (userRows.length === 0) {
+        return res.status(400).json({ message: 'User tidak ditemukan atau tidak aktif' });
+      }
+      if (userRows[0].role !== 'kasir') {
+        return res.status(400).json({ message: 'Hanya bisa menambahkan modal untuk kasir' });
+      }
+      user_id = target_user_id;
+    } catch (error) {
+      console.error('Error validating target user:', error);
+      return res.status(500).json({ message: 'Server error' });
+    }
+  }
 
   try {
     // Always insert new record for history tracking
@@ -166,14 +188,14 @@ app.post('/modal', authenticateToken, async (req, res) => {
       // Don't fail the request, but log the error
     }
 
-    // Log the action
+    // Log the action (use authenticated user's id for logging)
     await createLog(
-      user_id,
+      req.user.id,
       'INSERT',
       'modal',
       result.insertId,
       null,
-      { modal_type, nominal, user_id },
+      { modal_type, nominal, user_id, added_by_owner: req.user.role === 'owner' && target_user_id ? true : false },
       req
     );
 
@@ -292,6 +314,8 @@ app.get('/transfer', authenticateToken, async (req, res) => {
     const userId = req.user.role === 'kasir' ? req.user.id : null;
     const cashierId = req.query.cashier_id;
     const search = req.query.search || '';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -309,6 +333,18 @@ app.get('/transfer', authenticateToken, async (req, res) => {
     if (cashierId && req.user.role === 'owner' && cashierId !== 'all') {
       conditions.push('t.user_id = ?');
       params.push(cashierId);
+    }
+
+    // Date filtering
+    if (startDate && endDate) {
+      conditions.push('DATE(t.tanggal) BETWEEN ? AND ?');
+      params.push(startDate, endDate);
+    } else if (startDate) {
+      conditions.push('DATE(t.tanggal) >= ?');
+      params.push(startDate);
+    } else if (endDate) {
+      conditions.push('DATE(t.tanggal) <= ?');
+      params.push(endDate);
     }
 
     // Search functionality
@@ -550,17 +586,17 @@ app.get('/transfer-debit', authenticateToken, async (req, res) => {
     const userId = req.user.role === 'kasir' ? req.user.id : null;
     const { startDate, endDate } = req.query;
     
-    let query = 'SELECT * FROM transfer_debit';
+    let query = 'SELECT td.*, u.username as kasir_name FROM transfer_debit td LEFT JOIN users u ON td.user_id = u.id';
     let params = [];
     let conditions = [];
 
     if (userId) {
-      conditions.push('user_id = ?');
+      conditions.push('td.user_id = ?');
       params.push(userId);
     }
 
     if (startDate && endDate) {
-      conditions.push('DATE(tanggal) BETWEEN ? AND ?');
+      conditions.push('DATE(td.tanggal) BETWEEN ? AND ?');
       params.push(startDate, endDate);
     }
 
@@ -568,7 +604,7 @@ app.get('/transfer-debit', authenticateToken, async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY td.created_at DESC';
 
     const [rows] = await db.promise().execute(query, params);
     res.json(rows);

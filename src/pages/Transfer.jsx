@@ -54,6 +54,7 @@ const Transfer = () => {
   const [selectedCashier, setSelectedCashier] = useState('all');
   const [cashiers, setCashiers] = useState([]);
   const [periode, setPeriode] = useState('harian');
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]); // For owner: filter by date
   const [grafikData, setGrafikData] = useState({
     harian: [],
     mingguan: [],
@@ -69,7 +70,7 @@ const Transfer = () => {
 
   useEffect(() => {
     loadTransfers();
-  }, [selectedCashier, pagination.page]);
+  }, [selectedCashier, pagination.page, dateFilter]);
 
   // Debounce search untuk mengurangi request
   useEffect(() => {
@@ -97,6 +98,12 @@ const Transfer = () => {
         params.append('cashier_id', selectedCashier);
       }
       
+      // For owner: filter by date (today or selected date)
+      if (user?.role === 'owner' && dateFilter) {
+        params.append('startDate', dateFilter);
+        params.append('endDate', dateFilter);
+      }
+      
       if (transferSearch) {
         params.append('search', transferSearch);
       }
@@ -109,11 +116,27 @@ const Transfer = () => {
       const response = await api.get(url);
       
       if (response.data && response.pagination) {
-        setTransfers(Array.isArray(response.data) ? response.data : []);
+        let transfersData = Array.isArray(response.data) ? response.data : [];
+        // For owner: only show today's or latest date transfers
+        if (user?.role === 'owner') {
+          // Filter to show only transfers from selected date
+          transfersData = transfersData.filter(t => {
+            const transferDate = new Date(t.tanggal).toISOString().split('T')[0];
+            return transferDate === dateFilter;
+          });
+        }
+        setTransfers(transfersData);
         setPagination(response.pagination);
       } else {
         // Fallback untuk response lama
-        setTransfers(Array.isArray(response) ? response : []);
+        let transfersData = Array.isArray(response) ? response : [];
+        if (user?.role === 'owner') {
+          transfersData = transfersData.filter(t => {
+            const transferDate = new Date(t.tanggal).toISOString().split('T')[0];
+            return transferDate === dateFilter;
+          });
+        }
+        setTransfers(transfersData);
       }
     } catch (error) {
       console.error('Error loading transfers:', error);
@@ -359,10 +382,18 @@ Keterangan: ${transfer.keterangan || '-'}
     y += 10;
 
     // Summary statistics
-    const totalTransaksi = grafikData[periode]?.reduce((sum, item) => sum + item.total, 0) || 0;
-    const totalNominal = grafikData[periode]?.reduce((sum, item) => sum + item.total_nominal, 0) || 0;
-    const totalBiaya = grafikData[periode]?.reduce((sum, item) => sum + item.total_biaya, 0) || 0;
-    const totalAll = grafikData[periode]?.reduce((sum, item) => sum + item.total_all, 0) || 0;
+    const totalTransaksi = Array.isArray(grafikData[periode])
+      ? grafikData[periode].reduce((sum, item) => sum + (parseInt(item.total) || 0), 0)
+      : 0;
+    const totalNominal = Array.isArray(grafikData[periode])
+      ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_nominal) || 0), 0)
+      : 0;
+    const totalBiaya = Array.isArray(grafikData[periode])
+      ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_biaya) || 0), 0)
+      : 0;
+    const totalAll = Array.isArray(grafikData[periode])
+      ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_all) || 0), 0)
+      : 0;
 
     doc.setFontSize(10);
     doc.text(`Total Jumlah Transaksi: ${totalTransaksi}`, 14, y);
@@ -449,10 +480,18 @@ Keterangan: ${transfer.keterangan || '-'}
       [`Dicetak pada: ${new Date().toLocaleString('id-ID')}`],
       [''],
       ['RINGKASAN'],
-      ['Total Jumlah Transaksi', grafikData[periode]?.reduce((sum, item) => sum + item.total, 0) || 0],
-      ['Total Nominal Transfer', grafikData[periode]?.reduce((sum, item) => sum + item.total_nominal, 0) || 0],
-      ['Total Biaya Admin', grafikData[periode]?.reduce((sum, item) => sum + item.total_biaya, 0) || 0],
-      ['Total Keseluruhan', grafikData[periode]?.reduce((sum, item) => sum + item.total_all, 0) || 0],
+      ['Total Jumlah Transaksi', Array.isArray(grafikData[periode])
+        ? grafikData[periode].reduce((sum, item) => sum + (parseInt(item.total) || 0), 0)
+        : 0],
+      ['Total Nominal Transfer', Array.isArray(grafikData[periode])
+        ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_nominal) || 0), 0)
+        : 0],
+      ['Total Biaya Admin', Array.isArray(grafikData[periode])
+        ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_biaya) || 0), 0)
+        : 0],
+      ['Total Keseluruhan', Array.isArray(grafikData[periode])
+        ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_all) || 0), 0)
+        : 0],
       [''],
       [''],
       ['DATA PERIODE'],
@@ -596,19 +635,21 @@ Keterangan: ${transfer.keterangan || '-'}
               <Download className="h-5 w-5 mr-2" />
               Export Excel
             </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Transfer Baru
-            </button>
+            {user?.role !== 'owner' && (
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Transfer Baru
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Form Transfer */}
-      {showForm && (
+      {showForm && user?.role !== 'owner' && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
@@ -810,32 +851,46 @@ Keterangan: ${transfer.keterangan || '-'}
           <div className="bg-blue-50 p-3 rounded-lg">
             <div className="text-xs font-medium text-blue-600">Total Transaksi</div>
             <div className="text-lg font-bold text-blue-900">
-              {grafikData[periode]?.reduce((sum, item) => sum + (item.total || 0), 0) || 0}
+              {Array.isArray(grafikData[periode]) 
+                ? grafikData[periode].reduce((sum, item) => sum + (parseInt(item.total) || 0), 0)
+                : 0}
             </div>
           </div>
           <div className="bg-green-50 p-3 rounded-lg">
             <div className="text-xs font-medium text-green-600">Total Nominal</div>
             <div className="text-lg font-bold text-green-900">
-              {formatCurrency(grafikData[periode]?.reduce((sum, item) => sum + (item.total_nominal || 0), 0) || 0)}
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_nominal) || 0), 0)
+                  : 0
+              )}
             </div>
           </div>
           <div className="bg-purple-50 p-3 rounded-lg">
             <div className="text-xs font-medium text-purple-600">Total Biaya</div>
             <div className="text-lg font-bold text-purple-900">
-              {formatCurrency(grafikData[periode]?.reduce((sum, item) => sum + (item.total_biaya || 0), 0) || 0)}
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_biaya) || 0), 0)
+                  : 0
+              )}
             </div>
           </div>
           <div className="bg-gray-50 p-3 rounded-lg">
             <div className="text-xs font-medium text-gray-600">Total Keseluruhan</div>
             <div className="text-lg font-bold text-gray-900">
-              {formatCurrency(grafikData[periode]?.reduce((sum, item) => sum + (item.total_all || 0), 0) || 0)}
+              {formatCurrency(
+                Array.isArray(grafikData[periode])
+                  ? grafikData[periode].reduce((sum, item) => sum + (parseFloat(item.total_all) || 0), 0)
+                  : 0
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Favorit */}
-      {favorit.length > 0 && (
+      {user?.role !== 'owner' && favorit.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
@@ -884,8 +939,25 @@ Keterangan: ${transfer.keterangan || '-'}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {user?.role === 'owner' ? 'Riwayat Transfer Kasir' : 'Riwayat Transfer'}
+            </h3>
             <div className="flex items-center space-x-4">
+              {/* Date Filter for Owner */}
+              {user?.role === 'owner' && (
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Filter Tanggal</label>
+                  <input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(e) => {
+                      setDateFilter(e.target.value);
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
               {/* Search Transfer */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

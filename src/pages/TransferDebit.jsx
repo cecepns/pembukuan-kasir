@@ -12,6 +12,7 @@ import {
   Legend,
 } from 'chart.js';
 import { api } from '../utils/api';
+import { useAuth } from '../hooks/useAuth';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 
@@ -36,21 +37,67 @@ const TransferDebit = () => {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [periode, setPeriode] = useState('harian');
+  const [cashiers, setCashiers] = useState([]);
+  const [selectedCashier, setSelectedCashier] = useState('all');
+  const [totalSaldoAllCashiers, setTotalSaldoAllCashiers] = useState(0);
   const [grafikData, setGrafikData] = useState({
     harian: [],
     mingguan: [],
     bulanan: []
   });
+  const { user } = useAuth();
 
   useEffect(() => {
+    if (user?.role === 'owner') {
+      loadCashiers();
+      loadTotalSaldoAllCashiers();
+    }
     loadTransfers();
     loadGrafik();
-  }, [periode]);
+  }, [periode, selectedCashier]);
+
+  const loadCashiers = async () => {
+    try {
+      const response = await api.get('/user');
+      const kasirList = Array.isArray(response) 
+        ? response.filter(u => u.role === 'kasir' && u.status === 'aktif')
+        : [];
+      setCashiers(kasirList);
+    } catch (error) {
+      console.error('Error loading cashiers:', error);
+      setCashiers([]);
+    }
+  };
+
+  const loadTotalSaldoAllCashiers = async () => {
+    try {
+      const response = await api.get('/saldo/total');
+      setTotalSaldoAllCashiers(response.total || 0);
+    } catch (error) {
+      console.error('Error loading total saldo:', error);
+      setTotalSaldoAllCashiers(0);
+    }
+  };
 
   const loadTransfers = async () => {
     try {
-      const response = await api.get('/transfer-debit');
-      setTransfers(Array.isArray(response) ? response : []);
+      let url = '/transfer-debit';
+      const params = new URLSearchParams();
+      
+      if (user?.role === 'owner' && selectedCashier !== 'all') {
+        // Filter by cashier if selected
+        // Note: Backend may need to support cashier_id filter
+      }
+      
+      const response = await api.get(url);
+      let transfersData = Array.isArray(response) ? response : [];
+      
+      // Filter by cashier on frontend if owner
+      if (user?.role === 'owner' && selectedCashier !== 'all') {
+        transfersData = transfersData.filter(t => t.user_id === parseInt(selectedCashier));
+      }
+      
+      setTransfers(transfersData);
     } catch (error) {
       console.error('Error loading transfer debit:', error);
       setTransfers([]);
@@ -103,6 +150,19 @@ const TransferDebit = () => {
       style: 'currency',
       currency: 'IDR'
     }).format(amount);
+  };
+
+  const getKasirName = (transfer) => {
+    // First try to get from kasir_name (from backend JOIN)
+    if (transfer.kasir_name) {
+      return transfer.kasir_name;
+    }
+    // Fallback: find from cashiers list
+    if (transfer.user_id && cashiers.length > 0) {
+      const cashier = cashiers.find(c => c.id === transfer.user_id);
+      return cashier ? cashier.username : 'N/A';
+    }
+    return 'N/A';
   };
 
   const exportToPDF = () => {
@@ -267,13 +327,15 @@ const TransferDebit = () => {
               <Download className="h-5 w-5 mr-2" />
               Export Excel
             </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition duration-300 flex items-center"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Transfer Debit Baru
-            </button>
+            {user?.role !== 'owner' && (
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition duration-300 flex items-center"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Transfer Debit Baru
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -298,7 +360,7 @@ const TransferDebit = () => {
       </div>
 
       {/* Form Transfer Debit */}
-      {showForm && (
+      {showForm && user?.role !== 'owner' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Form Transfer Debit</h3>
           
@@ -367,6 +429,72 @@ const TransferDebit = () => {
         </div>
       )}
 
+      {/* Transfer List - Moved before Grafik for Owner */}
+      {user?.role === 'owner' && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit Kasir</h3>
+              {cashiers.length > 0 && (
+                <select
+                  value={selectedCashier}
+                  onChange={(e) => {
+                    setSelectedCashier(e.target.value);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="all">Semua Kasir</option>
+                  {cashiers.map((cashier) => (
+                    <option key={cashier.id} value={cashier.id}>
+                      {cashier.username}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tanggal
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Kasir
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Biaya
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Keterangan
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transfers.map((transfer) => (
+                  <tr key={transfer.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(transfer.tanggal).toLocaleDateString('id-ID')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {getKasirName(transfer)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(transfer.biaya)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transfer.keterangan}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Grafik Monitoring */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
@@ -404,61 +532,76 @@ const TransferDebit = () => {
         </div>
       </div>
 
-      {/* Transfer List */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit</h3>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tanggal
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Biaya
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Keterangan
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dibuat
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {transfers.map((transfer) => (
-                <tr key={transfer.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(transfer.tanggal).toLocaleDateString('id-ID')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(transfer.biaya)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {transfer.keterangan}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                      transfer.status === 'lunas' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {transfer.status || 'Pending'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(transfer.created_at).toLocaleDateString('id-ID')}
-                  </td>
+      {/* Transfer List - For Kasir only, or show saldo for owner */}
+      {user?.role !== 'owner' && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b">
+            <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit</h3>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tanggal
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Biaya
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Keterangan
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Dibuat
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transfers.map((transfer) => (
+                  <tr key={transfer.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(transfer.tanggal).toLocaleDateString('id-ID')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(transfer.biaya)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {transfer.keterangan}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
+                        transfer.status === 'lunas' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {transfer.status || 'Pending'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(transfer.created_at).toLocaleDateString('id-ID')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Saldo Seluruh Kasir for Owner */}
+      {user?.role === 'owner' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Saldo Seluruh Kasir</h3>
+          <div className="text-3xl font-bold text-purple-600">
+            {formatCurrency(totalSaldoAllCashiers)}
+          </div>
+          <p className="text-gray-600 mt-2">
+            Total saldo dari semua kasir
+          </p>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="bg-white rounded-lg shadow p-6">

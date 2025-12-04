@@ -34,6 +34,7 @@ ChartJS.register(
 
 const Dashboard = () => {
   const [saldoTotal, setSaldoTotal] = useState(0);
+  const [modalKasTotal, setModalKasTotal] = useState(0);
   const [ringkasan, setRingkasan] = useState({
     totalDeposit: 0,
     totalTransfer: 0,
@@ -62,6 +63,29 @@ const Dashboard = () => {
       // Load saldo total
       const saldoResponse = await api.get('/saldo/total');
       setSaldoTotal(saldoResponse.total || 0);
+
+      // For owner role: Load modal_kas total from all kasirs
+      if (user?.role === 'owner') {
+        try {
+          const modalResponse = await api.get('/modal');
+          const modalData = Array.isArray(modalResponse) ? modalResponse : [];
+          // Get latest modal_kas for each user_id
+          const modalKasMap = new Map();
+          modalData
+            .filter(m => m.modal_type === 'modal_kas')
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .forEach(m => {
+              if (!modalKasMap.has(m.user_id)) {
+                modalKasMap.set(m.user_id, parseFloat(m.nominal) || 0);
+              }
+            });
+          const totalModalKas = Array.from(modalKasMap.values()).reduce((sum, val) => sum + val, 0);
+          setModalKasTotal(totalModalKas);
+        } catch (error) {
+          console.error('Error loading modal kas:', error);
+          setModalKasTotal(0);
+        }
+      }
 
       // Load ringkasan transaksi
       const laporanResponse = await api.get('/laporan');
@@ -101,7 +125,51 @@ const Dashboard = () => {
     }).format(amount);
   };
 
-  const statCards = [
+  // Different stat cards for owner vs kasir
+  const statCards = user?.role === 'owner' ? [
+    {
+      title: 'TOTAL KESELURUHAN SALDO KASIR',
+      value: saldoTotal,
+      icon: DollarSign,
+      color: 'bg-blue-500',
+      textColor: 'text-blue-600'
+    },
+    {
+      title: 'TOTAL MODAL APLIKASI 7/ MODAL KAS Seluruh Kasir',
+      value: modalKasTotal,
+      icon: TrendingUp,
+      color: 'bg-green-500',
+      textColor: 'text-green-600'
+    },
+    {
+      title: 'Total Transfer Seluruh Kasir',
+      value: ringkasan.totalTransfer,
+      icon: CreditCard,
+      color: 'bg-purple-500',
+      textColor: 'text-purple-600'
+    },
+    {
+      title: 'Total Tarik Tunai Seluruh Kasir',
+      value: ringkasan.totalTarikTunai,
+      icon: TrendingDown,
+      color: 'bg-red-500',
+      textColor: 'text-red-600'
+    },
+    {
+      title: 'Total Biaya Tarik Tunai Seluruh Kasir',
+      value: ringkasan.totalBiayaTarikTunai,
+      icon: TrendingUp,
+      color: 'bg-orange-500',
+      textColor: 'text-orange-600'
+    },
+    {
+      title: 'Total Biaya Transfer Pakai Kartu Debit Seluruh Kasir',
+      value: ringkasan.totalBiayaTransferDebit,
+      icon: CreditCard,
+      color: 'bg-indigo-500',
+      textColor: 'text-indigo-600'
+    }
+  ] : [
     {
       title: 'Total Saldo',
       value: saldoTotal,
@@ -194,19 +262,21 @@ const Dashboard = () => {
           Selamat datang, {user?.username}!
         </h2>
         <p className="text-blue-100">
-          Ini adalah ringkasan aktivitas pembukuan kasir Anda hari ini.
+          {user?.role === 'owner' 
+            ? 'Ini adalah ringkasan aktivitas pembukuan seluruh kasir.' 
+            : 'Ini adalah ringkasan aktivitas pembukuan kasir Anda hari ini.'}
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${user?.role === 'owner' ? 'lg:grid-cols-3' : ''} gap-6`}>
         {statCards.map((stat, index) => (
           <div key={index} className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className={`${stat.color} p-3 rounded-lg`}>
                 <stat.icon className="h-6 w-6 text-white" />
               </div>
-              <div className="ml-4">
+              <div className="ml-4 flex-1">
                 <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                 <p className={`text-xl md:text-2xl font-bold ${stat.textColor}`}>
                   {formatCurrency(stat.value)}
