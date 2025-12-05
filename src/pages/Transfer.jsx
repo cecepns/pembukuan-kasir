@@ -219,8 +219,13 @@ const Transfer = () => {
 
   const handleEdit = (transfer) => {
     setEditingTransfer(transfer);
+    // Format tanggal untuk input date (YYYY-MM-DD)
+    const tanggalFormatted = transfer.tanggal 
+      ? new Date(transfer.tanggal).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+    
     setFormData({
-      tanggal: transfer.tanggal,
+      tanggal: tanggalFormatted,
       bank_tujuan: transfer.bank_tujuan,
       nomor_rekening: transfer.nomor_rekening,
       nama_pemilik: transfer.nama_pemilik,
@@ -626,7 +631,7 @@ const Transfer = () => {
       </div>
 
       {/* Form Transfer */}
-      {showForm && user?.role !== 'owner' && (
+      {showForm && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
