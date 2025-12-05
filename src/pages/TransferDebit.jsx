@@ -449,7 +449,7 @@ const TransferDebit = () => {
           <div className="p-6 border-b">
             <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit Kasir</h3>
-              <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex flex-wrap gap-4 items-end">
                 {/* Date Range Filter */}
                 <div className="flex flex-wrap gap-4 items-center">
                   <div>

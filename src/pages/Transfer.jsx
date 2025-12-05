@@ -819,7 +819,7 @@ const Transfer = () => {
             <h3 className="text-lg font-semibold text-gray-900">
               {user?.role === 'owner' ? 'Riwayat Transfer Kasir' : 'Riwayat Transfer'}
             </h3>
-            <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex flex-wrap gap-4 items-end">
               {/* Date Range Filter */}
               <div className="flex flex-wrap gap-4 items-center">
                 <div>
