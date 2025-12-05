@@ -52,7 +52,8 @@ const Transfer = () => {
   const [selectedCashier, setSelectedCashier] = useState('all');
   const [cashiers, setCashiers] = useState([]);
   const [periode, setPeriode] = useState('harian');
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [grafikData, setGrafikData] = useState({
     harian: [],
     mingguan: [],
@@ -70,7 +71,7 @@ const Transfer = () => {
 
   useEffect(() => {
     loadTransfers();
-  }, [selectedCashier, pagination.page, dateFilter]);
+  }, [selectedCashier, pagination.page, startDate, endDate]);
 
   // Debounce search untuk mengurangi request
   useEffect(() => {
@@ -104,10 +105,12 @@ const Transfer = () => {
         params.append('cashier_id', selectedCashier);
       }
       
-      // Filter by selected date (default: hari ini) untuk semua role
-      if (dateFilter) {
-        params.append('startDate', dateFilter);
-        params.append('endDate', dateFilter);
+      // Filter by date range
+      if (startDate) {
+        params.append('startDate', startDate);
+      }
+      if (endDate) {
+        params.append('endDate', endDate);
       }
       
       if (transferSearch) {
@@ -575,7 +578,7 @@ const Transfer = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center">
             <TransferIcon className="h-8 w-8 text-blue-600 mr-3" />
             <div>
@@ -812,26 +815,51 @@ const Transfer = () => {
       {/* Transfer List */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
               {user?.role === 'owner' ? 'Riwayat Transfer Kasir' : 'Riwayat Transfer'}
             </h3>
-            <div className="flex items-center space-x-4">
-              {/* Date Filter for Owner */}
-              {user?.role === 'owner' && (
+            <div className="flex flex-wrap gap-4 items-center">
+              {/* Date Range Filter */}
+              <div className="flex flex-wrap gap-4 items-center">
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Filter Tanggal</label>
+                  <label className="block text-xs text-gray-600 mb-1">Dari Tanggal</label>
                   <input
                     type="date"
-                    value={dateFilter}
+                    value={startDate}
                     onChange={(e) => {
-                      setDateFilter(e.target.value);
+                      setStartDate(e.target.value);
                       setPagination(prev => ({ ...prev, page: 1 }));
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-              )}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Sampai Tanggal</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(startDate || endDate) && (
+                  <button
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                      setPagination(prev => ({ ...prev, page: 1 }));
+                    }}
+                    className="mt-6 px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                    title="Reset Filter"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               {/* Search Transfer */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

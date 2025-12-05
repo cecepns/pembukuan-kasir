@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Download, BarChart3 } from 'lucide-react';
+import { CreditCard, Plus, Download, BarChart3, X } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -39,6 +39,8 @@ const TransferDebit = () => {
   const [periode, setPeriode] = useState('harian');
   const [cashiers, setCashiers] = useState([]);
   const [selectedCashier, setSelectedCashier] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [totalSaldoAllCashiers, setTotalSaldoAllCashiers] = useState(0);
   const [grafikData, setGrafikData] = useState({
     harian: [],
@@ -54,7 +56,7 @@ const TransferDebit = () => {
     }
     loadTransfers();
     loadGrafik();
-  }, [periode, selectedCashier]);
+  }, [periode, selectedCashier, startDate, endDate]);
 
   const loadCashiers = async () => {
     try {
@@ -84,9 +86,16 @@ const TransferDebit = () => {
       let url = '/transfer-debit';
       const params = new URLSearchParams();
       
-      if (user?.role === 'owner' && selectedCashier !== 'all') {
-        // Filter by cashier if selected
-        // Note: Backend may need to support cashier_id filter
+      // Date filtering
+      if (startDate) {
+        params.append('startDate', startDate);
+      }
+      if (endDate) {
+        params.append('endDate', endDate);
+      }
+      
+      if (params.toString()) {
+        url += '?' + params.toString();
       }
       
       const response = await api.get(url);
@@ -148,7 +157,9 @@ const TransferDebit = () => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
-      currency: 'IDR'
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
@@ -303,7 +314,7 @@ const TransferDebit = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center">
             <CreditCard className="h-8 w-8 text-purple-600 mr-3" />
             <div>
@@ -384,9 +395,12 @@ const TransferDebit = () => {
                   Biaya Transfer Debit
                 </label>
                 <input
-                  type="number"
-                  value={formData.biaya}
-                  onChange={(e) => setFormData({...formData, biaya: e.target.value})}
+                  type="text"
+                  value={formData.biaya ? formatCurrency(parseFloat(formData.biaya)) : ''}
+                  onChange={(e) => {
+                    const numeric = (e.target.value || '').replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, biaya: numeric });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Masukkan biaya transfer"
                   required
@@ -433,24 +447,63 @@ const TransferDebit = () => {
       {user?.role === 'owner' && (
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit Kasir</h3>
-              {cashiers.length > 0 && (
-                <select
-                  value={selectedCashier}
-                  onChange={(e) => {
-                    setSelectedCashier(e.target.value);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="all">Semua Kasir</option>
-                  {cashiers.map((cashier) => (
-                    <option key={cashier.id} value={cashier.id}>
-                      {cashier.username}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <div className="flex flex-wrap gap-4 items-center">
+                {/* Date Range Filter */}
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Dari Tanggal</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Sampai Tanggal</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  {(startDate || endDate) && (
+                    <button
+                      onClick={() => {
+                        setStartDate('');
+                        setEndDate('');
+                      }}
+                      className="mt-6 px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                      title="Reset Filter"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {cashiers.length > 0 && (
+                  <select
+                    value={selectedCashier}
+                    onChange={(e) => {
+                      setSelectedCashier(e.target.value);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="all">Semua Kasir</option>
+                    {cashiers.map((cashier) => (
+                      <option key={cashier.id} value={cashier.id}>
+                        {cashier.username}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
           
@@ -536,7 +589,46 @@ const TransferDebit = () => {
       {user?.role !== 'owner' && (
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Riwayat Transfer Debit</h3>
+              {/* Date Range Filter */}
+              <div className="flex items-center space-x-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Dari Tanggal</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Sampai Tanggal</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                {(startDate || endDate) && (
+                  <button
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                    }}
+                    className="mt-6 px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                    title="Reset Filter"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
           
           <div className="overflow-x-auto">

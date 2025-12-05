@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Banknote, Plus } from 'lucide-react';
+import { Banknote, Plus, X } from 'lucide-react';
 import { api } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -15,6 +15,8 @@ const TarikTunai = () => {
   const [tarikTunai, setTarikTunai] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [totalSaldoKeseluruhan, setTotalSaldoKeseluruhan] = useState(0);
   const { user } = useAuth();
 
@@ -25,11 +27,26 @@ const TarikTunai = () => {
 
   useEffect(() => {
     loadTarikTunai();
-  }, []);
+  }, [startDate, endDate]);
 
   const loadTarikTunai = async () => {
     try {
-      const response = await api.get('/tarik-tunai');
+      let url = '/tarik-tunai';
+      const params = new URLSearchParams();
+      
+      // Date filtering
+      if (startDate) {
+        params.append('startDate', startDate);
+      }
+      if (endDate) {
+        params.append('endDate', endDate);
+      }
+      
+      if (params.toString()) {
+        url += '?' + params.toString();
+      }
+      
+      const response = await api.get(url);
       setTarikTunai(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error('Error loading tarik tunai:', error);
@@ -96,7 +113,7 @@ const TarikTunai = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center">
             <Banknote className="h-8 w-8 text-red-600 mr-3" />
             <div>
@@ -170,17 +187,14 @@ const TarikTunai = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Bank
                 </label>
-                <select
+                <input
+                  type="text"
                   value={formData.bank}
                   onChange={(e) => setFormData({...formData, bank: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Nama Bank"
                   required
-                >
-                  <option value="">Pilih Bank</option>
-                  {banks.map(bank => (
-                    <option key={bank} value={bank}>{bank}</option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
@@ -279,7 +293,46 @@ const TarikTunai = () => {
       {/* Tarik Tunai List */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">Riwayat Tarik Tunai</h3>
+          <div className="flex flex-wrap gap-4 items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Riwayat Tarik Tunai</h3>
+            {/* Date Range Filter */}
+            <div className="flex flex-wrap gap-4 items-center">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Dari Tanggal</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Sampai Tanggal</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                  className="mt-6 px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                  title="Reset Filter"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
         
         <div className="overflow-x-auto">

@@ -153,7 +153,7 @@ const Laporan = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex items-center">
             <FileText className="h-8 w-8 text-green-600 mr-3" />
             <div>

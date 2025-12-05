@@ -831,13 +831,34 @@ app.post('/transfer-debit', authenticateToken, async (req, res) => {
 app.get('/tarik-tunai', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.role === 'kasir' ? req.user.id : null;
-    let query = 'SELECT * FROM tarik_tunai ORDER BY created_at DESC';
+    const { startDate, endDate } = req.query;
+    
+    let query = 'SELECT * FROM tarik_tunai';
     let params = [];
+    let conditions = [];
 
     if (userId) {
-      query = 'SELECT * FROM tarik_tunai WHERE user_id = ? ORDER BY created_at DESC';
+      conditions.push('user_id = ?');
       params.push(userId);
     }
+
+    // Date filtering
+    if (startDate && endDate) {
+      conditions.push('DATE(tanggal) BETWEEN ? AND ?');
+      params.push(startDate, endDate);
+    } else if (startDate) {
+      conditions.push('DATE(tanggal) >= ?');
+      params.push(startDate);
+    } else if (endDate) {
+      conditions.push('DATE(tanggal) <= ?');
+      params.push(endDate);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY created_at DESC';
 
     const [rows] = await db.promise().execute(query, params);
     res.json(rows);
