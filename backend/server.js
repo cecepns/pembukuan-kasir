@@ -802,7 +802,7 @@ app.post('/transfer-debit', authenticateToken, async (req, res) => {
 
   try {
     const [result] = await db.promise().execute(
-      'INSERT INTO transfer_debit (tanggal, biaya, keterangan, user_id, status, created_at) VALUES (?, ?, ?, ?, "pending", NOW())',
+      'INSERT INTO transfer_debit (tanggal, biaya, keterangan, user_id, status, created_at) VALUES (?, ?, ?, ?, "lunas", NOW())',
       [tanggal, biaya, keterangan, user_id]
     );
 
@@ -816,7 +816,7 @@ app.post('/transfer-debit', authenticateToken, async (req, res) => {
       'transfer_debit',
       result.insertId,
       null,
-      { tanggal, biaya, keterangan, user_id, status: 'pending' },
+      { tanggal, biaya, keterangan, user_id, status: 'lunas' },
       req
     );
 
@@ -874,7 +874,7 @@ app.post('/tarik-tunai', authenticateToken, async (req, res) => {
 
   try {
     const [result] = await db.promise().execute(
-      'INSERT INTO tarik_tunai (tanggal, bank, nominal_tarik, biaya_tarik, keterangan, user_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, "pending", NOW())',
+      'INSERT INTO tarik_tunai (tanggal, bank, nominal_tarik, biaya_tarik, keterangan, user_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, "lunas", NOW())',
       [tanggal, bank, nominal_tarik, biaya_tarik, keterangan, user_id]
     );
 
@@ -890,7 +890,7 @@ app.post('/tarik-tunai', authenticateToken, async (req, res) => {
       'tarik_tunai',
       result.insertId,
       null,
-      { tanggal, bank, nominal_tarik, biaya_tarik, keterangan, user_id, status: 'pending' },
+      { tanggal, bank, nominal_tarik, biaya_tarik, keterangan, user_id, status: 'lunas' },
       req
     );
 
