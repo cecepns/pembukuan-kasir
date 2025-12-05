@@ -46,7 +46,7 @@ const Layout = ({ children }) => {
         <div className="flex items-center justify-between h-16 px-6 border-b">
           <div className="flex items-center">
             <CreditCard className="h-8 w-8 text-blue-600" />
-            <span className="ml-2 text-xl font-bold text-gray-900">KasirBook</span>
+            <span className="ml-2 text-xs font-bold text-gray-900">KARANG SARI GROUP</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

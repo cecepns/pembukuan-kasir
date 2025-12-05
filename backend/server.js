@@ -806,11 +806,8 @@ app.post('/transfer-debit', authenticateToken, async (req, res) => {
       [tanggal, biaya, keterangan, user_id]
     );
 
-    // Only biaya adds to saldo
-    await db.promise().execute(
-      'UPDATE saldo SET total_saldo = total_saldo + ? WHERE user_id = ?',
-      [biaya, user_id]
-    );
+    // Update saldo menggunakan fungsi updateSaldo untuk konsistensi
+    await updateSaldo(user_id);
 
     // Log the action
     await createLog(
@@ -926,17 +923,24 @@ app.get('/laporan', authenticateToken, async (req, res) => {
       `SELECT COALESCE(SUM(nominal_tarik), 0) as total_tarik, COALESCE(SUM(biaya_tarik), 0) as total_biaya FROM tarik_tunai${whereClause}`,
       params
     );
-
-    // Get current saldo
-    let saldoQuery = 'SELECT COALESCE(SUM(total_saldo), 0) as saldo FROM saldo';
-    let saldoParams = [];
     
-    if (userId) {
-      saldoQuery += ' WHERE user_id = ?';
-      saldoParams.push(userId);
-    }
+    // Hitung sisa saldo langsung dari total-total transaksi
+    const modalAmount = Number(modalRows[0].total) || 0;
+    const transferNominal = Number(transferRows[0].total_transfer) || 0;
+    const transferBiaya = Number(transferRows[0].total_biaya) || 0;
+    const transferDebitAmount = Number(transferDebitRows[0].total) || 0;
+    const tarikTunaiNominal = Number(tarikTunaiRows[0].total_tarik) || 0;
+    const tarikTunaiBiaya = Number(tarikTunaiRows[0].total_biaya) || 0;
+    const tarikTunaiNet = tarikTunaiBiaya - tarikTunaiNominal;
 
-    const [saldoRows] = await db.promise().execute(saldoQuery, saldoParams);
+    // Konsisten dengan rumus updateSaldo:
+    // Total saldo = Modal (deposit) + Transfer (nominal+biaya) + Transfer Debit - Tarik Tunai (nominal - biaya)
+    const sisaSaldo =
+      modalAmount +
+      transferNominal +
+      transferBiaya +
+      transferDebitAmount +
+      tarikTunaiNet;
 
     const laporan = {
       totalDeposit: modalRows[0].total,
@@ -945,7 +949,7 @@ app.get('/laporan', authenticateToken, async (req, res) => {
       totalBiayaTransferDebit: transferDebitRows[0].total,
       totalTarikTunai: tarikTunaiRows[0].total_tarik,
       totalBiayaTarikTunai: tarikTunaiRows[0].total_biaya,
-      sisaSaldo: saldoRows[0].saldo
+      sisaSaldo
     };
 
     res.json(laporan);
@@ -1306,8 +1310,8 @@ async function updateSaldo(userId) {
     );
     const modalAmount = parseFloat(modalTotal[0].total) || 0;
 
-    // Transfer: mengurangi saldo (uang keluar untuk transfer)
-    // nominal + biaya = total uang yang keluar
+    // Transfer: MENAMBAH saldo (misalnya uang masuk dari hasil transfer)
+    // nominal + biaya = total uang yang masuk
     const [transferTotal] = await db.promise().execute(
       'SELECT COALESCE(SUM(nominal + biaya), 0) as total FROM transfer WHERE user_id = ?',
       [userId]
@@ -1335,8 +1339,8 @@ async function updateSaldo(userId) {
     const tarikTunaiBiayaAmount = parseFloat(tarikTunaiBiaya[0].total) || 0;
     const tarikTunaiNet = tarikTunaiBiayaAmount - tarikTunaiNominalAmount;
 
-    // Total saldo = Modal (deposit) + Transfer Debit - Transfer - Tarik Tunai (nominal - biaya)
-    const totalSaldo = modalAmount + transferDebitAmount - transferAmount + tarikTunaiNet;
+    // Total saldo = Modal (deposit) + Transfer + Transfer Debit - Tarik Tunai (nominal - biaya)
+    const totalSaldo = modalAmount + transferAmount + transferDebitAmount + tarikTunaiNet;
 
     // Update saldo
     await db.promise().execute(

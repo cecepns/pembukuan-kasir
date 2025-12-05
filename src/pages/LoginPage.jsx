@@ -36,7 +36,7 @@ const LoginPage = () => {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <CreditCard className="h-12 w-12 text-blue-600" />
-            <span className="ml-2 text-3xl font-bold text-gray-900">KasirBook</span>
+            <span className="ml-2 text-3xl font-bold text-gray-900">KARANG SARI GROUP</span>
           </div>
           <p className="text-gray-600">Masuk ke akun Anda</p>
         </div>

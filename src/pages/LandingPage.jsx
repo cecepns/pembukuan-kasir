@@ -55,7 +55,7 @@ const LandingPage = () => {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <CreditCard className="h-8 w-8 text-blue-600" />
-              <span className="ml-2 text-xl md:text-2xl font-bold text-gray-900">KasirBook</span>
+              <span className="ml-2 text-xl md:text-2xl font-bold text-gray-900">KARANG SARI GROUP</span>
             </div>
             <button 
               onClick={() => navigate('/login')}
@@ -145,10 +145,10 @@ const LandingPage = () => {
           <div className="text-center">
             <div className="flex items-center justify-center mb-4">
               <CreditCard className="h-8 w-8 text-blue-400" />
-              <span className="ml-2 text-xl md:text-2xl font-bold">KasirBook</span>
+              <span className="ml-2 text-xl md:text-2xl font-bold">KARANG SARI GROUP</span>
             </div>
             <p className="text-gray-400">
-              © 2025 KasirBook. Semua hak dilindungi.
+              © 2025 KARANG SARI GROUP. Semua hak dilindungi.
             </p>
           </div>
         </div>
