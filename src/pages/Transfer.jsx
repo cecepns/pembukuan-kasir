@@ -254,7 +254,7 @@ const Transfer = () => {
       year: 'numeric',
     });
     const nominalStr = Number(transfer.nominal || 0).toLocaleString('id-ID');
-    const totalStr = (Number(transfer.nominal || 0) + Number(transfer.biaya || 0)).toLocaleString('id-ID');
+    const totalStr = Number(transfer.nominal || 0).toLocaleString('id-ID');
   
     const lines = [
       'STRUK TRANSFER BANK',
